@@ -126,7 +126,7 @@ function reapStale() {
     const q = spawnSync(
       path.join(process.env.SystemRoot || "C:\\Windows", "System32", "tasklist.exe"),
       ["/FI", `PID eq ${pid}`, "/FI", "IMAGENAME eq node.exe", "/NH"],
-      { encoding: "utf8" },
+      { encoding: "utf8", windowsHide: true },
     );
     if (/node\.exe/i.test(q.stdout || "")) {
       spawn(
@@ -272,7 +272,9 @@ function startRun(run) {
     const typingConfigured = envFile.JEV_BROWSER_TYPE_PROVIDER || envFile.JEV_BROWSER_TYPE_API_KEY || envFile.JEV_BROWSER_TYPE_BASE_URL;
     if (!envFile.OPENROUTER_API_KEY && envFile.TYPESAFE_API_KEY && !typingConfigured) args.push("--no-typing");
   }
-  const child = spawn(process.execPath, args, { env: childEnv(run.delayMs) });
+  // windowsHide: sem isso o Windows abre um console VISÍVEL pra cada execução,
+  // porque este servidor roda sem console próprio (spawn detached do supervisor).
+  const child = spawn(process.execPath, args, { env: childEnv(run.delayMs), windowsHide: true });
   activeChild = child;
   run.child = child;
   try { fs.writeFileSync(PIDFILE, String(child.pid)); } catch {}
