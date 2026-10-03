@@ -353,7 +353,92 @@ async function cmdTudo() {
   say("Dia a dia: clique no icone 'jev browser' na area de trabalho.");
 }
 
+// Registra o MCP jev-browser (modo extensão) nos agentes locais encontrados.
+// Idempotente: entrada existente fica como está.
+async function cmdConectar() {
+  const serverPath = join(ROOT, "jev-browser-control", "mcp", "server.mjs");
+  if (!existsSync(serverPath)) return die("mcp/server.mjs nao encontrado.");
+  const home = homedir();
+  let feitos = [];
+
+  // ZCode: ~/.zcode/cli/config.json (mcp.servers)
+  const zcPath = join(home, ".zcode", "cli", "config.json");
+  try {
+    if (existsSync(zcPath)) {
+      const cfg = JSON.parse(readFileSync(zcPath, "utf8"));
+      cfg.mcp ??= {};
+      cfg.mcp.servers ??= {};
+      if (cfg.mcp.servers["jev-browser"]) {
+        say("- ZCode: ja registrado (mantido como esta).");
+      } else {
+        cfg.mcp.servers["jev-browser"] = {
+          command: "node",
+          args: [serverPath],
+          env: { JBC_MODE: "extension" },
+        };
+        writeFileSync(zcPath, JSON.stringify(cfg, null, 2));
+        say("- ZCode: registrado.");
+      }
+      feitos.push("zcode");
+    }
+  } catch (e) { say(`[!] ZCode: falhou (${e.message})`); }
+
+  // Claude Code: ~/.claude.json (mcpServers no topo)
+  const ccPath = join(home, ".claude.json");
+  try {
+    if (existsSync(ccPath)) {
+      const cfg = JSON.parse(readFileSync(ccPath, "utf8"));
+      cfg.mcpServers ??= {};
+      if (cfg.mcpServers["jev-browser"]) {
+        say("- Claude Code: ja registrado (mantido).");
+      } else {
+        cfg.mcpServers["jev-browser"] = {
+          command: "node",
+          args: [serverPath],
+          env: { JBC_MODE: "extension" },
+        };
+        writeFileSync(ccPath, JSON.stringify(cfg, null, 2));
+        say("- Claude Code: registrado.");
+      }
+      feitos.push("claude-code");
+    }
+  } catch (e) { say(`[!] Claude Code: falhou (${e.message})`); }
+
+  // Codex: ~/.codex/config.toml (bloco [mcp_servers.jev-browser])
+  const cxPath = join(home, ".codex", "config.toml");
+  try {
+    if (existsSync(cxPath)) {
+      const cur = readFileSync(cxPath, "utf8");
+      if (cur.includes("[mcp_servers.jev-browser]")) {
+        say("- Codex: ja registrado (mantido).");
+      } else {
+        const bloco = [
+          "",
+          "[mcp_servers.jev-browser]",
+          'command = "node"',
+          `args = ["${serverPath.replace(/\\/g, "\\\\")}"]`,
+          'env = { JBC_MODE = "extension" }',
+          "",
+        ].join("\n");
+        writeFileSync(cxPath, cur.endsWith("\n") ? cur + bloco : cur + "\n" + bloco);
+        say("- Codex: registrado.");
+      }
+      feitos.push("codex");
+    }
+  } catch (e) { say(`[!] Codex: falhou (${e.message})`); }
+
+  if (!feitos.length) {
+    say("Nenhum agente local conhecido encontrado (ZCode/Claude Code/Codex).");
+    say("Registre manualmente: node <repo>/jev-browser-control/mcp/server.mjs com JBC_MODE=extension");
+    return;
+  }
+  say("");
+  say("[ok] Feito. Reinicie o agente para conectar. A extensao precisa estar");
+  say("    carregada no Chrome e com 'bridge' ativo nas configuracoes dela.");
+  say("    LLMs na nuvem (ChatGPT/claude.ai): ative 'Remote AI apps' nas opcoes da extensao.");
+}
+
 const cmd = (process.argv[2] || "start").toLowerCase();
-const cmds = { setup: cmdSetup, start: cmdStart, stop: cmdStop, status: cmdStatus, extensao: cmdExtensao, atalho: cmdAtalho, tudo: cmdTudo };
-if (!cmds[cmd]) die(`Uso: node jev.mjs [tudo|start|stop|status|extensao|atalho|setup]  (default: start)`);
+const cmds = { setup: cmdSetup, start: cmdStart, stop: cmdStop, status: cmdStatus, extensao: cmdExtensao, atalho: cmdAtalho, tudo: cmdTudo, conectar: cmdConectar };
+if (!cmds[cmd]) die(`Uso: node jev.mjs [tudo|start|stop|status|extensao|atalho|conectar|setup]  (default: start)`);
 cmds[cmd]();
