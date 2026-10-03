@@ -91,6 +91,7 @@ Atalhos por sistema: **Windows** — duplo clique em `start.bat` ou `jev.bat sta
 O que o supervisor garante:
 
 - **Instância única** — segundo `start` não duplica serviço; só abre o painel de novo.
+- **Guia única** — cada guia aberta mantém um batimento (`/api/heartbeat`); se o painel já está aberto em alguma guia, `start` não abre outra (e o painel avisa quantas guias existem).
 - **Serviço desacoplado** — feche o terminal, o serviço continua; log da sessão em `front/runs/server.log`.
 - **Desligamento completo** — `stop` derruba a cadeia inteira (Windows: `taskkill /T`; POSIX: kill do grupo de processo) e remove o pidfile. Órfãos de crash são colhidos no próximo boot via pidfile.
 

@@ -108,11 +108,16 @@ async function cmdStart() {
     say("    (link 'chave' no topo da pagina) ou crie a partir de front/.env.example.");
   }
 
-  // Instância única: já de pé? Só abre o painel de novo.
+  // Instância única + guia única: painel já aberto em alguma guia (batimento
+  // ativo) não ganha outra; só avisamos onde ele está.
   const already = await status();
   if (already && already.pid) {
-    say(`Ja esta rodando (pid ${already.pid}). Abrindo ${URL} ...`);
-    openBrowser(URL);
+    if (already.guias > 0) {
+      say(`Ja esta rodando (pid ${already.pid}) e o painel ja esta aberto em ${already.guias} guia(s) - nao abri outra.`);
+    } else {
+      say(`Ja esta rodando (pid ${already.pid}). Abrindo ${URL} ...`);
+      openBrowser(URL);
+    }
     return;
   }
 
@@ -143,7 +148,11 @@ async function cmdStart() {
       say(`[ok] Painel em ${URL}  (pid ${s.pid})`);
       say(`  Parar tudo: node jev.mjs stop   |   ver estado: node jev.mjs status`);
       say(`  Log da sessao: front/runs/server.log`);
-      openBrowser(URL);
+      if (s.guias > 0) {
+        say(`  Painel ja aberto em ${s.guias} guia(s) - nao abri outra.`);
+      } else {
+        openBrowser(URL);
+      }
       return;
     }
     if (child.exitCode !== null) {

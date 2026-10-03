@@ -167,6 +167,15 @@ const queue = [];
 let activeRun = null;
 let activeChild = null;
 
+// Guias do painel conectadas: cada aba aberta mantém um EventSource no
+// /api/heartbeat; fechei a aba, a conexão cai e o contador baixa. É assim que
+// o supervisor sabe se vale a pena abrir nova guia.
+const uiClients = new Set();
+function broadcastGuias() {
+  const frame = `data: ${JSON.stringify({ type: "guias", n: uiClients.size })}\n\n`;
+  for (const res of uiClients) { try { res.write(frame); } catch {} }
+}
+
 function runSnapshot(run) {
   return {
     id: run.id, task: run.task, url: run.url, status: run.status,
@@ -225,6 +234,7 @@ function ensureHeartbeat() {
     for (const run of runs.values()) {
       for (const res of run.listeners) { try { res.write(": hb\n\n"); } catch {} }
     }
+    for (const res of uiClients) { try { res.write(": hb\n\n"); } catch {} }
   }, 15000);
   heartbeat.unref();
 }
@@ -468,6 +478,20 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  if (req.method === "GET" && u.pathname === "/api/heartbeat") {
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      "Connection": "keep-alive",
+    });
+    res.write("retry: 3000\n\n");
+    uiClients.add(res);
+    ensureHeartbeat();
+    broadcastGuias();
+    res.on("close", () => { uiClients.delete(res); broadcastGuias(); });
+    return;
+  }
+
   if (req.method === "GET" && u.pathname === "/api/status") {
     const envFile = readEnvFile();
     const key = envFile.OPENROUTER_API_KEY || envFile.TYPESAFE_API_KEY || null;
@@ -478,6 +502,7 @@ const server = http.createServer((req, res) => {
       keyPreview: hasKey ? keyPreview(key) : null,
       running: Boolean(activeRun),
       queued: queue.length,
+      guias: uiClients.size,
       pid: process.pid,
     }));
   }

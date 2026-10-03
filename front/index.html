@@ -170,8 +170,8 @@
 <body>
 <div class="container">
   <header>
-    <span class="brand">jev <em>browser</em></span>
-    <button class="key" id="keyState" title="Configurar chave do OpenRouter">chave: …</button>
+    <span class="brand">jev <em>browser</em> <span id="guias" class="hint" hidden style="text-transform:none;letter-spacing:0"></span></span>
+    <button class="key" id="keyState" title="Configurar chave do cérebro (Jev)">chave: …</button>
   </header>
 
   <label class="label" for="task">Tarefa</label>
@@ -273,6 +273,21 @@ async function refreshKeyState() {
   }
 }
 refreshKeyState();
+
+// Batimento: mantém o servidor sabendo que esta guia está viva e avisa se
+// abriram mais de uma guia do painel.
+{
+  const hb = new EventSource("/api/heartbeat");
+  hb.onmessage = (m) => {
+    let ev; try { ev = JSON.parse(m.data); } catch { return; }
+    if (ev.type === "guias") {
+      const el = $("guias");
+      el.hidden = ev.n <= 1;
+      el.textContent = ev.n > 1 ? `· ${ev.n} guias abertas` : "";
+      el.style.color = "var(--amber)";
+    }
+  };
+}
 
 // Modal da chave: abrir, fechar, salvar com validação no servidor.
 const keyModal = $("keyModal");
