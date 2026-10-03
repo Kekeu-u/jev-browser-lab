@@ -77,13 +77,20 @@ Estados de um run: `queued → running → done | error | blocked | max_steps | 
 
 ## Instalação rápida (Node 22+; Windows, macOS e Linux)
 
-Tudo passa pelo supervisor `jev.mjs` — um comando por tarefa:
+**Primeira vez — um comando só** (instala o que faltar, cria o ícone na área de trabalho e sobe o painel):
 
 ```sh
-node jev.mjs setup     # primeira vez: dependências, build, Chromium, .env
+node jev.mjs tudo        # Windows também: duplo clique em instalar.bat
+```
+
+Dia a dia: **clique no ícone "jev browser"** na área de trabalho (Linux: menu de aplicativos), ou `node jev.mjs start`. Os demais comandos:
+
+```sh
 node jev.mjs start     # sobe o serviço e abre o painel (ja rodando? só abre)
 node jev.mjs status    # estado: rodando/parado, pid, chave, fila
 node jev.mjs stop      # para TUDO: servidor, CLI e Chromium, sem órfãos
+node jev.mjs extensao  # prepara a instalação da extensão no seu Chrome
+node jev.mjs atalho    # só recria o ícone da área de trabalho
 ```
 
 Atalhos por sistema: **Windows** — duplo clique em `start.bat` ou `jev.bat start`; **macOS/Linux** — `./jev start` (dá `chmod +x jev` uma vez).

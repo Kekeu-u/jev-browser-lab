@@ -8,6 +8,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync, unlinkSync, statSync, mkdirSync, copyFileSync, openSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { homedir } from "node:os";
 import process from "node:process";
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
@@ -256,7 +257,103 @@ async function cmdExtensao() {
   say("Pronto: painel lateral do Jev no SEU Chrome, com seus logins.");
 }
 
+// Ícone .ico a partir do PNG da extensão (formato ICO aceita PNG embutido).
+function writeIcoFromPng(pngFile, icoFile) {
+  const png = readFileSync(pngFile);
+  const w = png.readUInt32BE(16) >= 256 ? 0 : png.readUInt32BE(16);
+  const h = png.readUInt32BE(20) >= 256 ? 0 : png.readUInt32BE(20);
+  const header = Buffer.alloc(22);
+  header.writeUInt16LE(0, 0);
+  header.writeUInt16LE(1, 2);
+  header.writeUInt16LE(1, 4);
+  header[6] = w;
+  header[7] = h;
+  header.writeUInt16LE(1, 10);
+  header.writeUInt16LE(32, 12);
+  header.writeUInt32LE(png.length, 14);
+  header.writeUInt32LE(22, 18);
+  writeFileSync(icoFile, Buffer.concat([header, png]));
+}
+
+async function cmdAtalho() {
+  const png = join(ROOT, "jev-browser-control", "extension", "icons", "icon48.png");
+  if (IS_WIN) {
+    const ico = join(RUNS, "jev.ico");
+    try {
+      if (existsSync(png) && !existsSync(ico)) writeIcoFromPng(png, ico);
+    } catch {}
+    // .lnk via PowerShell (arquivo .ps1 evita inferno de aspas); Desktop real
+    // via GetFolderPath (funciona com OneDrive redirecionado).
+    const ps1 = join(RUNS, "atalho.ps1");
+    writeFileSync(ps1, [
+      `$d = [Environment]::GetFolderPath('Desktop')`,
+      `$ws = New-Object -ComObject WScript.Shell`,
+      `$s = $ws.CreateShortcut("$d\\jev browser.lnk")`,
+      `$s.TargetPath = "$env:JEV_ROOT\\start.bat"`,
+      `$s.WorkingDirectory = "$env:JEV_ROOT"`,
+      `$s.WindowStyle = 7`,
+      `$s.Description = "Painel jev browser"`,
+      `if (Test-Path "$env:JEV_ICO") { $s.IconLocation = "$env:JEV_ICO" }`,
+      `$s.Save()`,
+      `Write-Output $s.FullName`,
+    ].join("\n"));
+    const r = spawnSync("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", ps1], {
+      encoding: "utf8",
+      windowsHide: true,
+      env: { ...process.env, JEV_ROOT: ROOT, JEV_ICO: ico },
+    });
+    const out = (r.stdout || "").trim();
+    if (r.status === 0 && out) {
+      say(`[ok] Icone criado na area de trabalho: ${out}`);
+    } else {
+      say("[!] Nao consegui criar o atalho (" + ((r.stderr || "").trim().slice(0, 120) || "erro desconhecido") + ")");
+    }
+    return;
+  }
+  if (process.platform === "linux") {
+    const dir = join(homedir(), ".local", "share", "applications");
+    try {
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(join(dir, "jev-browser.desktop"), [
+        "[Desktop Entry]",
+        "Type=Application",
+        "Name=jev browser",
+        `Exec=${process.execPath} ${join(ROOT, "jev.mjs")} start`,
+        `Path=${ROOT}`,
+        `Icon=${existsSync(png) ? png : ""}`,
+        "Terminal=false",
+        "Categories=Utility;",
+      ].join("\n"));
+      say("[ok] Atalho criado no menu de aplicativos (jev browser).");
+    } catch {
+      say("[!] Nao consegui criar o .desktop.");
+    }
+    return;
+  }
+  say("No macOS: use 'node jev.mjs start' no terminal, ou crie um app com Automator apontando pra esse comando.");
+}
+
+async function cmdTudo() {
+  say("== jev: deixando tudo pronto ==");
+  const faltaCli = !existsSync(join(REPO, "node_modules")) || !existsSync(join(REPO, "dist", "index.js"));
+  if (faltaCli) {
+    say("1/3 Instalando dependencias e compilando (so na primeira vez)...");
+    await cmdSetup();
+  } else {
+    say("1/3 Dependencias ok.");
+  }
+  say("2/3 Icone na area de trabalho...");
+  await cmdAtalho();
+  say("3/3 Subindo o painel...");
+  await cmdStart();
+  say("");
+  say("Proximos passos (so na primeira vez):");
+  say("  - Chave do cerebro: botao 'chave' no topo do painel (sk-or-... ou ts_...)");
+  say("  - Seu Chrome do dia a dia: node jev.mjs extensao");
+  say("Dia a dia: clique no icone 'jev browser' na area de trabalho.");
+}
+
 const cmd = (process.argv[2] || "start").toLowerCase();
-const cmds = { setup: cmdSetup, start: cmdStart, stop: cmdStop, status: cmdStatus, extensao: cmdExtensao };
-if (!cmds[cmd]) die(`Uso: node jev.mjs [start|stop|status|setup|extensao]  (default: start)`);
+const cmds = { setup: cmdSetup, start: cmdStart, stop: cmdStop, status: cmdStatus, extensao: cmdExtensao, atalho: cmdAtalho, tudo: cmdTudo };
+if (!cmds[cmd]) die(`Uso: node jev.mjs [tudo|start|stop|status|extensao|atalho|setup]  (default: start)`);
 cmds[cmd]();
