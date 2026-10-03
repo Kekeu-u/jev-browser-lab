@@ -256,6 +256,16 @@ let currentId = null;
 let es = null;
 let timer = null;
 
+// Modo visualizador: /?img=run-<ts>.jpg exibe o print em tela cheia (mesma
+// origem, então passa pelo guarda; usado pra inspecionar artefatos de run).
+{
+  const m = location.search.match(/[?&]img=(run-\d+\.jpg)/);
+  if (m) {
+    document.body.innerHTML = '<img src="/runs/' + m[1] + '" style="width:100vw;height:100vh;object-fit:contain;background:#000;margin:0;display:block">';
+    throw new Error("modo visualizador");
+  }
+}
+
 async function refreshKeyState() {
   const el = $("keyState");
   try {
