@@ -1,0 +1,17 @@
+{
+  "name": "jev-native-control",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Controle de computador (mouse, teclado, tela, janelas) multiplataforma — fundação do app nativo do jev browser.",
+  "main": "control.mjs",
+  "scripts": {
+    "test": "node selftest.mjs"
+  },
+  "dependencies": {
+    "@nut-tree-fork/nut-js": "^4.2.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

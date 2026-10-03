@@ -141,6 +141,10 @@ jev browser/
 │   └── EVENTS-SCHEMA.md       # contrato compartilhado (SSOT dos eventos)
 ├── jev-browser-control/       # clone do nexibeo/jev-browser-control (MIT):
 │   │                          #   extensão Chrome + MCP pro Chrome real
+│   │                          #   (nosso chat lateral com modos está aqui)
+├── native/                    # controle de COMPUTADOR multiplataforma (nut.js):
+│   │                          #   mouse, teclado, captura de tela, janelas.
+│   │                          #   CLI e API — fundação do app nativo híbrido
 └── prompts-sonnet.md          # prompts de revisão usados durante o build
 ```
 
@@ -152,6 +156,8 @@ jev browser/
 
 ## Estado e roadmap
 
-Feito: eventos ao vivo, fila com cancelamento, histórico persistido, presets com piso no servidor, print ao vivo, hardening de segurança (2 revisões independentes + 1 externa).
+Feito: eventos ao vivo, fila com cancelamento, histórico persistido, presets com piso no servidor, print ao vivo, hardening de segurança (2 revisões independentes + 1 externa), chat LLM no painel lateral da extensão (modos Navegador/Computador) e **`native/`**: controle de computador multiplataforma via nut.js (mouse, teclado, tela, janelas — CLI e API), a fundação do modo Computador.
+
+Próximo degrau do modo híbrido: o app nativo com os botões **Navegador / Computador / Híbrido** — ele controla o PC via `native/` e o navegador via ponte da extensão (10522). A extensão sozinha nunca controla o computador (sandbox do Chrome).
 
 Fora do escopo por decisão de design: jitter/"humanização" de ritmo, engajamento automático em redes sociais, unificação dos dois modos.
