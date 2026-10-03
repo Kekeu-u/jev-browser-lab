@@ -1,0 +1,506 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>jev browser — controle</title>
+<style>
+  :root {
+    --bg: #0a0a0a;
+    --surface: rgba(255,255,255,.05);
+    --surface-hover: rgba(255,255,255,.1);
+    --line: rgba(255,255,255,.08);
+    --line-strong: rgba(255,255,255,.14);
+    --teal: #2dd4bf;
+    --teal-soft: #5eead4;
+    --cyan: #22d3ee;
+    --green: #4ade80;
+    --amber: #fbbf24;
+    --red: #f87171;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: #fff;
+    font-family: ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+    font-size: 14px;
+    min-height: 100vh;
+  }
+  .container { max-width: 780px; margin: 0 auto; padding: 0 20px 60px; }
+
+  header {
+    height: 44px;
+    display: flex; align-items: center; justify-content: space-between;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 28px;
+  }
+  header .brand { font-size: 10px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: rgba(255,255,255,.7); }
+  header .brand em { font-style: normal; color: var(--teal-soft); }
+  header .key { font-size: 9px; text-transform: uppercase; letter-spacing: .1em; color: rgba(255,255,255,.4); }
+  header .key.ok { color: var(--green); }
+  header .key.no { color: var(--red); }
+  header .key { cursor: pointer; background: none; border: none; font-family: inherit; padding: 4px 6px; border-radius: 6px; }
+  header .key:hover { background: rgba(255,255,255,.05); }
+
+  .backdrop {
+    position: fixed; inset: 0; z-index: 50;
+    background: rgba(0,0,0,.6);
+    backdrop-filter: blur(4px);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .backdrop[hidden] { display: none; }
+  .modal {
+    width: min(420px, 90vw);
+    background: #0a0a0a;
+    border: 1px solid var(--line-strong);
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow: 0 24px 64px rgba(0,0,0,.6);
+  }
+  .modal .btn-row { margin-top: 14px; }
+
+  .label { font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: .1em; color: rgba(255,255,255,.5); display: block; margin: 0 0 6px; }
+  .hint { font-size: 11px; color: rgba(255,255,255,.35); }
+
+  textarea, input[type=text], input[type=number], select {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    color: #fff;
+    padding: 10px 12px;
+    font: inherit;
+    outline: none;
+    transition: border-color .15s ease;
+  }
+  textarea:focus, input:focus, select:focus { border-color: rgba(45,212,191,.5); }
+  textarea { min-height: 88px; resize: vertical; }
+  input[type=number] { font-variant-numeric: tabular-nums; }
+  select { cursor: pointer; }
+  select option { background: #141414; color: #fff; }
+  ::placeholder { color: #737373; }
+
+  .row { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+  .row > div { flex: 1; min-width: 120px; }
+
+  .btn-row { display: flex; gap: 10px; margin-top: 18px; }
+  button.primary {
+    flex: 1;
+    padding: 11px 16px;
+    border: none; border-radius: 12px;
+    background: linear-gradient(90deg, #14b8a6, #22d3ee);
+    color: #fff; font: inherit; font-weight: 500;
+    cursor: pointer;
+    box-shadow: 0 8px 24px rgba(20,184,166,.25);
+    transition: opacity .15s ease;
+  }
+  button.primary:hover { opacity: .9; }
+  button.primary:disabled { opacity: .5; cursor: default; }
+  button.danger {
+    display: none;
+    padding: 11px 16px;
+    border-radius: 12px;
+    background: rgba(248,113,113,.12);
+    border: 1px solid rgba(248,113,113,.35);
+    color: var(--red); font: inherit; font-weight: 500;
+    cursor: pointer;
+  }
+  button.danger:hover { background: rgba(248,113,113,.2); }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 16px;
+    margin-top: 26px;
+  }
+  .panel-top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+
+  .status { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; }
+  .st-done { color: var(--green); } .st-failed, .st-error { color: var(--red); }
+  .st-timeout, .st-max_steps, .st-stuck, .st-queued, .st-interrupted { color: var(--amber); }
+  .st-running, .st-cancelled { color: var(--teal-soft); }
+  .st-running.pulse { animation: pulse 1.6s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .45; } }
+
+  .meta { font-size: 10px; color: rgba(255,255,255,.4); font-variant-numeric: tabular-nums; }
+  a.url { color: var(--teal-soft); font-size: 11px; word-break: break-all; text-decoration: none; }
+  a.url:hover { text-decoration: underline; }
+
+  ol.steps { list-style: none; margin-top: 14px; border-top: 1px solid var(--line); }
+  ol.steps li {
+    display: flex; gap: 10px; padding: 7px 2px;
+    border-bottom: 1px solid rgba(255,255,255,.04);
+    font-size: 11px; color: rgba(255,255,255,.55);
+  }
+  ol.steps .n { color: rgba(255,255,255,.3); font-variant-numeric: tabular-nums; flex-shrink: 0; width: 18px; }
+  ol.steps .act { color: rgba(255,255,255,.85); font-family: ui-monospace, Consolas, monospace; flex-shrink: 0; }
+  ol.steps .conf { margin-left: auto; color: rgba(255,255,255,.35); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+
+  details { margin-top: 14px; }
+  summary { font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: .1em; color: rgba(255,255,255,.5); cursor: pointer; padding: 6px 0; }
+  pre {
+    background: rgba(0,0,0,.4);
+    border: 1px solid rgba(255,255,255,.05);
+    border-radius: 10px;
+    padding: 12px;
+    font-size: 11px; line-height: 1.55;
+    color: rgba(255,255,255,.6);
+    white-space: pre-wrap; word-break: break-word;
+    max-height: 340px; overflow: auto;
+  }
+  img.shot { width: 100%; border-radius: 10px; border: 1px solid var(--line); margin-top: 14px; display: block; }
+
+  .warn { font-size: 11px; color: var(--amber); margin-top: 12px; }
+  .err { font-size: 12px; color: var(--red); margin-top: 10px; }
+  .err small { display: block; color: rgba(255,255,255,.35); font-size: 10px; margin-top: 6px; white-space: pre-wrap; }
+
+  #history { margin-top: 30px; }
+  #history button {
+    display: flex; width: 100%; text-align: left; gap: 10px; align-items: baseline;
+    background: none; border: none; border-bottom: 1px solid rgba(255,255,255,.04);
+    padding: 8px 2px; color: rgba(255,255,255,.55); font-size: 11px; cursor: pointer;
+  }
+  #history button:hover { background: rgba(255,255,255,.025); }
+  #history .h-status { flex-shrink: 0; font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; width: 84px; }
+  #history .h-task { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #history .h-time { color: rgba(255,255,255,.3); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <span class="brand">jev <em>browser</em></span>
+    <button class="key" id="keyState" title="Configurar chave do OpenRouter">chave: …</button>
+  </header>
+
+  <label class="label" for="task">Tarefa</label>
+  <textarea id="task" placeholder="Ex.: pesquise &quot;café ristretto&quot; e abra o artigo da Wikipédia sobre ele"></textarea>
+
+  <div class="row">
+    <div style="flex: 2">
+      <label class="label" for="url">URL inicial</label>
+      <input type="text" id="url" value="https://en.wikipedia.org/wiki/Main_Page" spellcheck="false">
+    </div>
+  </div>
+  <div class="row">
+    <div>
+      <label class="label" for="preset">Ritmo</label>
+      <select id="preset">
+        <option value="2000">Observar — 2s entre ações</option>
+        <option value="800" selected>Padrão — 0,8s entre ações</option>
+        <option value="0">Rápido — sem pausa (só sites seus)</option>
+      </select>
+    </div>
+    <div>
+      <label class="label" for="maxSteps">Passos máx.</label>
+      <input type="number" id="maxSteps" value="24" min="1" max="60">
+    </div>
+    <div>
+      <label class="label" for="maxSeconds">Segundos máx.</label>
+      <input type="number" id="maxSeconds" value="180" min="10" max="900">
+    </div>
+  </div>
+  <p class="hint" style="margin-top:8px">Em site de terceiro o servidor impõe pausa mínima de 0,75s, mesmo no Rápido — cortesia com o site, não burla de detector.</p>
+
+  <div class="btn-row">
+    <button class="primary" id="run">Executar</button>
+    <button class="danger" id="cancel">Cancelar</button>
+  </div>
+  <p class="err" id="err" hidden></p>
+
+  <div class="panel" id="panel" hidden>
+    <div class="panel-top">
+      <span class="status" id="st"></span>
+      <span class="meta" id="meta"></span>
+    </div>
+    <div style="margin-top:8px"><a class="url" id="furl" target="_blank" rel="noreferrer"></a></div>
+    <ol class="steps" id="steps"></ol>
+    <p class="warn" id="warn" hidden></p>
+    <img class="shot" id="shot" alt="print da página final" hidden>
+    <details>
+      <summary>Página final (markdown)</summary>
+      <pre id="page"></pre>
+    </details>
+  </div>
+
+  <div id="history" hidden>
+    <span class="label">Execuções</span>
+    <div id="histList"></div>
+  </div>
+
+  <div class="backdrop" id="keyModal" hidden>
+    <div class="modal">
+      <span class="label">Chave do OpenRouter</span>
+      <input type="password" id="keyInput" placeholder="sk-or-v1-…" autocomplete="off" spellcheck="false" maxlength="120">
+      <p class="hint" style="margin-top:10px">
+        Gravada só no arquivo local <code>front/.env</code> (com permissão restrita) e validada com o OpenRouter antes de salvar.
+        Ela nunca aparece na página nem em logs. Crie uma em openrouter.ai/settings/keys.
+      </p>
+      <p class="err" id="keyErr" hidden></p>
+      <p class="hint" id="keyOk" hidden style="color:var(--green);margin-top:10px"></p>
+      <div class="btn-row">
+        <button class="primary" id="keySave">Salvar e testar</button>
+        <button class="danger" id="keyClose" style="display:block">Fechar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let currentId = null;
+let es = null;
+let timer = null;
+
+async function refreshKeyState() {
+  const el = $("keyState");
+  try {
+    const s = await (await fetch("/api/status")).json();
+    if (s.hasKey) {
+      el.textContent = "chave ok · " + (s.keyPreview || "***");
+      el.className = "key ok";
+    } else {
+      el.textContent = "chave: definir";
+      el.className = "key no";
+    }
+  } catch {
+    el.textContent = "servidor offline";
+    el.className = "key";
+  }
+}
+refreshKeyState();
+
+// Modal da chave: abrir, fechar, salvar com validação no servidor.
+const keyModal = $("keyModal");
+function openKeyModal() {
+  $("keyErr").hidden = true;
+  $("keyOk").hidden = true;
+  $("keyInput").value = "";
+  keyModal.hidden = false;
+  $("keyInput").focus();
+}
+function closeKeyModal() { keyModal.hidden = true; }
+$("keyState").onclick = openKeyModal;
+$("keyClose").onclick = closeKeyModal;
+keyModal.addEventListener("click", (e) => { if (e.target === keyModal) closeKeyModal(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !keyModal.hidden) closeKeyModal(); });
+$("keyInput").addEventListener("keydown", (e) => { if (e.key === "Enter") $("keySave").click(); });
+
+$("keySave").onclick = async () => {
+  const chave = $("keyInput").value.trim();
+  $("keyErr").hidden = true;
+  $("keyOk").hidden = true;
+  $("keySave").disabled = true;
+  $("keySave").textContent = "Validando…";
+  try {
+    const res = await fetch("/api/chave", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chave }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      $("keyErr").hidden = false;
+      $("keyErr").textContent = data.error || "Erro " + res.status;
+      return;
+    }
+    $("keyOk").hidden = false;
+    $("keyOk").textContent = data.aviso
+      ? "Chave salva. " + data.aviso + " (prévia: " + data.keyPreview + ")"
+      : "Chave validada e salva (" + data.keyPreview + ").";
+    await refreshKeyState();
+    setTimeout(closeKeyModal, 1200);
+  } catch (e) {
+    $("keyErr").hidden = false;
+    $("keyErr").textContent = "Falha de rede: " + e.message;
+  } finally {
+    $("keySave").disabled = false;
+    $("keySave").textContent = "Salvar e testar";
+  }
+};
+
+// Preferências persistidas na máquina local.
+try {
+  const saved = JSON.parse(localStorage.getItem("jevfront") || "{}");
+  if (saved.preset) $("preset").value = saved.preset;
+  if (saved.maxSteps) $("maxSteps").value = saved.maxSteps;
+  if (saved.maxSeconds) $("maxSeconds").value = saved.maxSeconds;
+} catch {}
+
+const STATUS_PT = {
+  queued: "na fila", running: "executando", done: "done", failed: "falhou",
+  cancelled: "cancelado", interrupted: "interrompido", blocked: "bloqueado (anti-bot)",
+  error: "erro", max_steps: "limite de passos", timeout: "tempo esgotado", stuck: "travado",
+};
+
+function setStatus(status) {
+  const st = $("st");
+  st.textContent = "status: " + (STATUS_PT[status] || status);
+  st.className = "status st-" + status;
+  const active = status === "queued" || status === "running";
+  $("cancel").style.display = active ? "block" : "none";
+  $("run").disabled = active;
+  if (status === "running") st.classList.add("pulse"); else st.classList.remove("pulse");
+  if (active && !timer) {
+    const t0 = Date.now();
+    timer = setInterval(() => {
+      $("meta").textContent = Math.round((Date.now() - t0) / 1000) + "s";
+    }, 500);
+  }
+  if (!active && timer) { clearInterval(timer); timer = null; }
+}
+
+function stepRow(s) {
+  const li = document.createElement("li");
+  const n = document.createElement("span"); n.className = "n"; n.textContent = s.step;
+  const a = document.createElement("span"); a.className = "act"; a.textContent = s.executed_action || s.proposed_action;
+  const d = document.createElement("span"); d.textContent = s.detail || "";
+  const c = document.createElement("span"); c.className = "conf";
+  c.textContent = s.confidence != null ? Math.round(s.confidence * 100) + "%" : "";
+  li.append(n, a, d, c);
+  return li;
+}
+
+function showRun(snap) {
+  currentId = snap.id;
+  $("panel").hidden = false;
+  setStatus(snap.status);
+  const r = snap.result;
+  const sec = snap.finishedAt && snap.startedAt ? ((snap.finishedAt - snap.startedAt) / 1000).toFixed(1) + "s" : "";
+  let cost = "";
+  if (r) {
+    const costVal = Number(r.usage && r.usage.est_cost_usd);
+    if (Number.isFinite(costVal)) cost = " · US$ " + costVal.toFixed(4);
+  }
+  const nSteps = (snap.events || []).length || (r && r.steps ? r.steps.length : 0);
+  $("meta").textContent = `${nSteps} passos${sec ? " · " + sec : ""}${cost}`;
+
+  $("furl").textContent = (r && r.final_url) || "";
+  const furl = (r && r.final_url) || "";
+  $("furl").href = /^https?:\/\//i.test(furl) ? furl : "#";
+
+  $("steps").innerHTML = "";
+  for (const s of snap.events || []) $("steps").append(stepRow(s));
+  if (r && !snap.events?.length) for (const s of r.steps || []) $("steps").append(stepRow(s));
+
+  $("warn").hidden = !(r && r.warnings && r.warnings.length);
+  if (!$("warn").hidden) $("warn").textContent = r.warnings.join(" · ");
+
+  const shotUrl = r && r.screenshot;
+  $("shot").hidden = !shotUrl;
+  if (shotUrl) $("shot").src = shotUrl + "?t=" + Date.now();
+
+  $("page").textContent = r && r.page && r.page.content ? r.page.content : (snap.status === "done" ? "(sem payload de página)" : "");
+  if (snap.error) {
+    $("err").hidden = false;
+    $("err").textContent = snap.error;
+    if (snap.stderrTail) { const sm = document.createElement("small"); sm.textContent = snap.stderrTail; $("err").append(sm); }
+  }
+}
+
+async function loadRun(id) {
+  try {
+    const res = await fetch("/api/runs/" + id);
+    if (!res.ok) return;
+    showRun(await res.json());
+    refreshHistory();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  } catch {}
+}
+
+async function refreshHistory() {
+  try {
+    const res = await fetch("/api/runs");
+    if (!res.ok) return;
+    const { runs } = await res.json();
+    const box = $("histList");
+    box.innerHTML = "";
+    $("history").hidden = runs.length === 0;
+    for (const item of runs) {
+      const b = document.createElement("button");
+      const s = document.createElement("span");
+      s.className = "h-status st-" + item.status;
+      s.textContent = STATUS_PT[item.status] || item.status;
+      const t = document.createElement("span"); t.className = "h-task"; t.textContent = item.task;
+      const d = document.createElement("span"); d.className = "h-time";
+      d.textContent = new Date(item.createdAt).toLocaleTimeString("pt-BR");
+      b.append(s, t, d);
+      b.onclick = () => loadRun(item.id);
+      box.append(b);
+    }
+  } catch {}
+}
+
+function stopStream() {
+  if (es) { es.close(); es = null; }
+}
+
+$("cancel").onclick = async () => {
+  if (!currentId) return;
+  try { await fetch(`/api/runs/${currentId}/cancelar`, { method: "POST" }); } catch {}
+};
+
+$("run").onclick = async () => {
+  $("err").hidden = true;
+  stopStream();
+  try {
+    localStorage.setItem("jevfront", JSON.stringify({
+      preset: $("preset").value,
+      maxSteps: +$("maxSteps").value,
+      maxSeconds: +$("maxSeconds").value,
+    }));
+  } catch {}
+  try {
+    const res = await fetch("/api/run", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        task: $("task").value,
+        url: $("url").value,
+        maxSteps: +$("maxSteps").value,
+        maxSeconds: +$("maxSeconds").value,
+        delayMs: +$("preset").value,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      $("err").hidden = false;
+      $("err").textContent = data.error || "Erro " + res.status;
+      return;
+    }
+    currentId = data.id;
+    $("panel").hidden = false;
+    $("steps").innerHTML = "";
+    $("warn").hidden = true;
+    $("shot").hidden = true;
+    $("page").textContent = "";
+    $("furl").textContent = "";
+    setStatus(data.status);
+    refreshHistory();
+
+    es = new EventSource(`/api/runs/${data.id}/events`);
+    es.onmessage = (m) => {
+      let ev;
+      try { ev = JSON.parse(m.data); } catch { return; }
+      if (ev.type === "step") {
+        $("steps").append(stepRow(ev.step));
+        $("meta").textContent = ev.step.step + " passos";
+        // Print ao vivo: o arquivo é sobrescrito pela CLI a cada ação.
+        $("shot").hidden = false;
+        $("shot").alt = "print ao vivo da página";
+        $("shot").src = `/runs/${currentId}-live.jpg?t=${Date.now()}`;
+      }
+      else if (ev.type === "status") setStatus(ev.status);
+      else if (ev.type === "end") { stopStream(); loadRun(data.id); }
+    };
+  } catch (e) {
+    $("err").hidden = false;
+    $("err").textContent = "Falha de rede: " + e.message;
+  }
+};
+
+refreshHistory();
+</script>
+</body>
+</html>

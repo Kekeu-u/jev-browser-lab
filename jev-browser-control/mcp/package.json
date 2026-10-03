@@ -1,0 +1,40 @@
+{
+  "name": "jev-browser-control-mcp",
+  "version": "0.4.0",
+  "description": "MCP server that lets Claude and Codex drive a real Chrome, with Jev (a fast decision model) choosing each click. Opens its own Chrome through Playwright, or drives your everyday Chrome through the Jev Browser Control extension.",
+  "type": "module",
+  "bin": {
+    "jev-browser-control-mcp": "server.mjs"
+  },
+  "files": [
+    "server.mjs",
+    "lib/",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "browser",
+    "browser-automation",
+    "chrome",
+    "claude",
+    "jev",
+    "mcp",
+    "openrouter",
+    "playwright",
+    "typesafe"
+  ],
+  "homepage": "https://jevbrowsercontrol.com",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nexibeo/jev-browser-control.git",
+    "directory": "mcp"
+  },
+  "license": "MIT",
+  "author": "Jeroen Erne (https://www.linkedin.com/in/jeroenerne/)",
+  "dependencies": {
+    "playwright-core": "^1.63.0"
+  }
+}

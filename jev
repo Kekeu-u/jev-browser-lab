@@ -1,0 +1,3 @@
+#!/bin/sh
+# macOS/Linux: ./jev start | ./jev stop | ./jev status | ./jev setup
+exec node "$(dirname "$0")/jev.mjs" "$@"
