@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="pt-BR">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -11,45 +11,34 @@
   <header class="top">
     <div class="brand"><img src="icons/icon48.png" alt=""> Jev</div>
     <div class="row pills">
-      <span class="pill" id="claude" title="Claude connects through the MCP server on this computer"><span class="dot"></span><span>Claude</span></span>
+      <span class="pill" id="claude" title="Claude conecta pelo servidor MCP deste computador"><span class="dot"></span><span>Claude</span></span>
       <span class="pill" id="provider"><span class="dot"></span><span>…</span></span>
-      <span class="pill" id="remote" hidden title="Remote AI apps (Grok Bot, ChatGPT, claude.ai) can control this browser through jevbrowsercontrol.com"><span class="dot"></span><span>Remote</span></span>
+      <span class="pill" id="remote" hidden title="Apps de IA remotos controlam este navegador pelo relay"><span class="dot"></span><span>Remote</span></span>
     </div>
   </header>
 
-  <main>
-    <form id="task" class="card">
-      <label class="field" for="goal" style="margin-top:0">What should Jev do in this tab?</label>
-      <textarea id="goal" rows="3" placeholder="e.g. Search Wikipedia for Ristretto and open the article" required></textarea>
-      <details id="more">
-        <summary>Details Jev may type</summary>
-        <textarea id="details" rows="2" placeholder="Names, dates, addresses. Never passwords."></textarea>
-      </details>
-      <div class="row actions">
-        <button class="btn primary grow" id="run" type="submit">Run</button>
-        <button class="btn danger" id="stop" type="button" hidden>Stop</button>
-      </div>
-      <p class="hint" id="keyhint" hidden></p>
-    </form>
+  <div class="modebar">
+    <label for="mode">Modo</label>
+    <select id="mode">
+      <option value="navegador">🌐 Navegador</option>
+      <option value="computador">🖥️ Computador (requer app nativo)</option>
+    </select>
+  </div>
 
+  <main>
     <section id="confirm" class="card confirm" hidden role="alertdialog" aria-labelledby="confirm-title">
-      <h3 id="confirm-title">Allow this click?</h3>
+      <h3 id="confirm-title">Permitir este clique?</h3>
       <p id="confirm-text"></p>
       <div class="row">
-        <button class="btn primary grow" id="allow">Allow once</button>
-        <button class="btn" id="deny">Stop</button>
+        <button class="btn primary grow" id="allow">Permitir uma vez</button>
+        <button class="btn" id="deny">Parar</button>
       </div>
     </section>
+
+    <div id="chat" aria-live="polite"></div>
 
     <section aria-live="polite">
       <ol id="log" class="log"></ol>
-      <div id="result" class="card result" hidden></div>
-    </section>
-
-    <section id="empty" class="empty">
-      <p><strong>Two ways to use it</strong></p>
-      <p>Type a goal above and Jev drives this tab, one decision about every half second.</p>
-      <p>Or connect Claude: Claude plans, and hands fast browser work to Jev. <a href="options.html#claude" target="_blank">Set up Claude</a></p>
     </section>
   </main>
 
@@ -60,6 +49,12 @@
     <span class="grow"></span>
     <span id="cost" class="mono"></span>
   </footer>
+
+  <form id="chat-form" class="chatbar">
+    <textarea id="msg" rows="2" placeholder="Fale com o Jev… (Ctrl+Enter envia)"></textarea>
+    <button class="btn primary" id="send" type="submit" title="Enviar">➤</button>
+    <button class="btn danger" id="chat-stop" type="button" hidden title="Interromper">■</button>
+  </form>
   <script type="module" src="sidepanel.js"></script>
 </body>
 </html>

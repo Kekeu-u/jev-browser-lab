@@ -1,136 +1,171 @@
 const $ = (id) => document.getElementById(id);
 const port = chrome.runtime.connect({ name: 'panel' });
-let running = null; // taskId shown in the log
+let running = null; // taskId mostrado no log
 let confirmId = null;
+let busy = false;
 
 const OP_LABEL = { CLICK: 'CLICK', TYPE_TEXT: 'TYPE', SELECT: 'SELECT', PRESS_ENTER: 'ENTER', SCROLL_DOWN: 'SCROLL', SCROLL_UP: 'SCROLL', BACK: 'BACK', WAIT: 'WAIT', DONE: 'DONE', BLOCKED: 'BLOCKED' };
-const STATUS = {
-  done: ['Done', 'ok'],
-  done_unconfirmed: ['Done, but unconfirmed', 'warn'],
-  blocked: ['Blocked', 'bad'],
-  stuck: ['Stuck', 'bad'],
-  budget: ['Stopped at a limit', 'warn'],
-  stopped: ['Stopped', 'warn'],
-  needs_confirmation: ['Waiting for your OK', 'warn'],
-  needs_input: ['Needs a value', 'warn'],
+
+const TOOL_LABEL = {
+  pagina_atual: 'olhando a aba atual',
+  ler_pagina: 'lendo a página',
+  navegar: 'navegando',
+  tarefa: 'executando no navegador',
+  verificar: 'verificando a página',
 };
 
 function setClaude(connected) {
   const el = $('claude');
   el.querySelector('.dot').className = 'dot' + (connected ? ' on' : '');
-  el.querySelector('span:last-child').textContent = connected ? 'Claude connected' : 'Claude not connected';
+  el.querySelector('span:last-child').textContent = connected ? 'Claude conectado' : 'Claude off';
 }
 
 function setRemote({ enabled, connected }) {
   const el = $('remote');
   el.hidden = !enabled;
   el.querySelector('.dot').className = 'dot' + (connected ? ' on' : ' warn');
-  el.querySelector('span:last-child').textContent = connected ? 'Remote on' : 'Remote: connecting';
+  el.querySelector('span:last-child').textContent = connected ? 'Remote on' : 'Remote: conectando';
 }
 
 function setProvider(s) {
   const el = $('provider');
   const name = s.provider === 'cloud' ? 'Credits' : s.provider === 'custom' ? 'Custom' : 'OpenRouter';
   el.querySelector('.dot').className = 'dot' + (s.key_set ? ' on' : ' warn');
-  el.querySelector('span:last-child').textContent = s.key_set ? name : `${name}: no key`;
-  const hint = $('keyhint');
-  hint.hidden = s.key_set;
-  hint.innerHTML = s.key_set ? '' : 'Add an API key in <a href="options.html" target="_blank">Settings</a> first.';
+  el.querySelector('span:last-child').textContent = s.key_set ? name : `${name}: sem chave`;
 }
 
-function setRunning(on) {
-  $('run').hidden = on;
-  $('stop').hidden = !on;
-  $('goal').disabled = on;
-}
-
-function li(html, cls = '') {
-  const el = document.createElement('li');
-  el.className = cls;
-  el.innerHTML = html;
-  $('log').appendChild(el);
-  el.scrollIntoView({ block: 'nearest' });
-  $('empty').hidden = true;
-  return el;
-}
+// ---------- chat ----------
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-const pct = (n) => (typeof n === 'number' ? Math.round(n * 100) + '%' : '');
 const usd = (n) => (n < 0.01 ? '$' + n.toFixed(4) : '$' + n.toFixed(3));
 
-function onEvent(e) {
-  if (e.type === 'start') {
-    running = e.taskId;
-    $('log').innerHTML = '';
-    $('result').hidden = true;
-    setRunning(true);
-    li(`<span class="n">▸</span><span class="what">${esc(e.goal)}<span class="typed">${esc(e.title || e.url)}${e.source === 'claude' ? ' · from Claude' : e.source === 'remote' ? ' · from a remote app' : ''}</span></span><span></span>`);
-    return;
-  }
-  if (e.taskId !== running) return;
-  if (e.type === 'action') {
-    const op = OP_LABEL[e.operation] || e.operation;
-    const failed = String(e.outcome).startsWith('failed');
-    li(`<span class="n">${e.step}</span><span class="what"><span class="op">${op}</span>${esc(e.action)}${e.text ? `<span class="typed">“${esc(e.text)}”</span>` : ''}${failed ? `<span class="typed">${esc(e.outcome)}</span>` : ''}</span><span class="meta">${pct(e.target_confidence ?? e.confidence)}<br>${e.decide_ms} ms</span>`, failed ? 'failed' : '');
-    $('cost').textContent = usd(e.cost || 0);
-  } else if (e.type === 'stale') {
-    li(`<span class="n">↻</span><span class="what">Page changed before acting; looking again</span><span></span>`, 'stale');
-  } else if (e.type === 'end') {
-    setRunning(false);
-    running = null;
-    const [title, cls] = STATUS[e.status] || [e.status, 'warn'];
-    const r = $('result');
-    r.className = 'card result ' + cls;
-    r.innerHTML = `<h3>${esc(title)}</h3>${e.note ? `<p>${esc(e.note)}</p>` : ''}<p class="stats">${e.steps.length} actions · ${(e.elapsed_ms / 1000).toFixed(1)} s · ${usd(e.cost_usd || 0)}${e.credits_remaining_usd !== undefined ? ` · $${e.credits_remaining_usd.toFixed(2)} credits left` : ''}</p>`;
-    r.hidden = false;
-    $('cost').textContent = usd(e.cost_usd || 0);
-  }
+function bubble(role, html) {
+  const div = document.createElement('div');
+  div.className = 'msg ' + role;
+  div.innerHTML = html;
+  $('chat').appendChild(div);
+  div.scrollIntoView({ block: 'end', behavior: 'smooth' });
+  return div;
 }
+
+function notice(text) {
+  return bubble('tool', `<span>${esc(text)}</span>`);
+}
+
+function setBusy(on) {
+  busy = on;
+  $('send').hidden = on;
+  $('chat-stop').hidden = !on;
+  $('msg').disabled = on;
+  if (!on) $('msg').focus();
+}
+
+const TOOL_RUN = new Map(); // aviso "executando…" -> substitui pelo resultado
 
 port.onMessage.addListener((msg) => {
   if (msg.type === 'state') {
     setClaude(msg.bridge.connected);
     setProvider(msg.settings);
     if (msg.relay) setRemote(msg.relay);
-    if (msg.running.length) { running = msg.running[0].taskId; setRunning(true); }
+    if (msg.running.length) { running = msg.running[0].taskId; }
   } else if (msg.type === 'bridge') setClaude(msg.connected);
   else if (msg.type === 'relay') setRemote(msg);
   else if (msg.type === 'settings') setProvider(msg.settings);
-  else if (msg.type === 'event') onEvent(msg.event);
-  else if (msg.type === 'idle') { if (!running || msg.taskId === running) setRunning(false); }
-  else if (msg.type === 'error') {
-    setRunning(false);
-    const r = $('result');
-    r.className = 'card result bad';
-    r.innerHTML = `<h3>Couldn't run</h3><p>${esc(msg.message)}</p>`;
-    r.hidden = false;
-  } else if (msg.type === 'confirm-expired') {
+  else if (msg.type === 'chat-typing') {
+    setBusy(true);
+    bubble('jev typing', '<span class="dots">…</span>');
+  } else if (msg.type === 'chat-event') {
+    const e = msg.event;
+    if (e.type === 'tool') {
+      const args = e.args || {};
+      const detail = e.tool === 'tarefa' && args.objetivo ? `: ${args.objetivo}` : e.tool === 'navegar' && args.url ? `: ${args.url}` : '';
+      TOOL_RUN.set(e.tool, notice(`▶ ${TOOL_LABEL[e.tool] || e.tool}${detail}`));
+    } else if (e.type === 'tool-result') {
+      const el = TOOL_RUN.get(e.tool);
+      if (el) { el.remove(); TOOL_RUN.delete(e.tool); }
+      notice(`${e.ok ? '✔' : '✖'} ${TOOL_LABEL[e.tool] || e.tool}`);
+    }
+  } else if (msg.type === 'chat-done') {
+    document.querySelectorAll('.msg.typing').forEach((el) => el.remove());
+    setBusy(false);
+    bubble('jev', esc(msg.fala).replace(/\n/g, '<br>'));
+    if (msg.cost) $('cost').textContent = usd(msg.cost);
+  } else if (msg.type === 'chat-error') {
+    document.querySelectorAll('.msg.typing').forEach((el) => el.remove());
+    setBusy(false);
+    bubble('jev err', esc(msg.message));
+  } else if (msg.type === 'event') onEvent(msg.event);
+  else if (msg.type === 'idle') { if (!busy) running = null; }
+  else if (msg.type === 'error' && !busy) bubble('jev err', esc(msg.message));
+  else if (msg.type === 'confirm-expired') {
     if (msg.id === confirmId) { $('confirm').hidden = true; confirmId = null; }
   } else if (msg.type === 'confirm') {
     confirmId = msg.id;
     let host = msg.url;
     try { host = new URL(msg.url).hostname; } catch {}
-    const who = msg.source === 'remote' ? 'A remote app wants' : 'Jev wants';
-    $('confirm-text').textContent = `${who} to click “${msg.label}” on ${host}. This may be hard to undo.`;
+    $('confirm-text').textContent = `O Jev quer clicar em “${msg.label}” em ${host}. Isso pode ser difícil de desfazer.`;
     $('confirm').hidden = false;
     $('allow').focus();
   }
 });
 
-$('task').addEventListener('submit', (ev) => {
+// Passos das tarefas seguem no log detalhado (mesmo formato de antes).
+function li(html, cls = '') {
+  const el = document.createElement('li');
+  el.className = cls;
+  el.innerHTML = html;
+  $('log').appendChild(el);
+  el.scrollIntoView({ block: 'nearest' });
+  return el;
+}
+const pct = (n) => (typeof n === 'number' ? Math.round(n * 100) + '%' : '');
+
+function onEvent(e) {
+  if (e.type === 'start') {
+    running = e.taskId;
+    $('log').innerHTML = '';
+    li(`<span class="n">▸</span><span class="what">${esc(e.goal)}</span><span></span>`);
+    return;
+  }
+  if (e.taskId !== running) return;
+  if (e.type === 'action') {
+    const op = OP_LABEL[e.operation] || e.operation;
+    const failed = String(e.outcome).startsWith('failed');
+    li(`<span class="n">${e.step}</span><span class="what"><span class="op">${op}</span>${esc(e.action)}${e.text ? `<span class="typed">“${esc(e.text)}”</span>` : ''}</span><span class="meta">${pct(e.target_confidence ?? e.confidence)}</span>`, failed ? 'failed' : '');
+    $('cost').textContent = usd(e.cost || 0);
+  } else if (e.type === 'end') {
+    running = null;
+    const ok = e.status === 'done';
+    li(`<span class="n">${ok ? '✔' : '✖'}</span><span class="what">${esc(e.status)}${e.note ? `<span class="typed">${esc(e.note)}</span>` : ''}</span><span class="meta">${e.steps.length} ações</span>`, ok ? '' : 'failed');
+    $('cost').textContent = usd(e.cost_usd || 0);
+  }
+}
+
+$('chat-form').addEventListener('submit', (ev) => {
   ev.preventDefault();
-  const goal = $('goal').value.trim();
-  if (!goal) return;
-  setRunning(true);
-  port.postMessage({ type: 'run', goal, details: $('details').value.trim() || undefined });
+  if (busy) return;
+  const text = $('msg').value.trim();
+  if (!text) return;
+  $('msg').value = '';
+  bubble('user', esc(text).replace(/\n/g, '<br>'));
+  $('log').innerHTML = '';
+  port.postMessage({ type: 'chat', text, mode: $('mode').value });
 });
-$('goal').addEventListener('keydown', (ev) => {
-  if (ev.key === 'Enter' && (ev.metaKey || ev.ctrlKey)) $('task').requestSubmit();
+$('msg').addEventListener('keydown', (ev) => {
+  if (ev.key === 'Enter' && (ev.metaKey || ev.ctrlKey)) $('chat-form').requestSubmit();
 });
-$('stop').addEventListener('click', () => port.postMessage({ type: 'stop', taskId: running }));
+$('chat-stop').addEventListener('click', () => {
+  port.postMessage({ type: 'chat-stop' });
+  port.postMessage({ type: 'stop' });
+});
+$('claude').addEventListener('click', () => port.postMessage({ type: 'reconnect' }));
+
 const answer = (ok) => { port.postMessage({ type: 'confirm', id: confirmId, ok }); $('confirm').hidden = true; confirmId = null; };
 $('allow').addEventListener('click', () => answer(true));
 $('deny').addEventListener('click', () => answer(false));
-$('claude').addEventListener('click', () => port.postMessage({ type: 'reconnect' }));
 
+$('mode').addEventListener('change', () => chrome.storage.local.set({ chatMode: $('mode').value }));
+chrome.storage.local.get('chatMode').then(({ chatMode }) => { if (chatMode) $('mode').value = chatMode; });
+
+bubble('jev', 'Oi! Eu sou o Jev — controlo as abas deste navegador com seus logins. Escolha o modo acima e mande um comando: <i>“pesquise o preço do dólar e me diga”</i>, <i>“abra meu TikTok Studio e traga as métricas da semana”</i>… Ações irreversíveis eu pergunto antes.');
 port.postMessage({ type: 'getState' });

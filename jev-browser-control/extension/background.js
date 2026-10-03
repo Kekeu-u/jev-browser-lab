@@ -2,8 +2,9 @@
 // to the Chrome driver and the Jev agent.
 import { loadSettings, saveSettings, isBlocked, describe, relayEndpoint, DEFAULTS } from './lib/settings.js';
 import { IRREVERSIBLE } from './lib/policy.js';
-import { makeProvider } from './lib/provider.js';
+import { makeProvider, endpoints } from './lib/provider.js';
 import { runTask, findElement, checkPage } from './lib/agent.js';
+import { runChat } from './lib/chat.js';
 import { ChromeDriver, releaseDebugger } from './lib/driver.js';
 import { Bridge } from './lib/bridge.js';
 
@@ -321,6 +322,58 @@ async function onRequest(method, params, ctx) {
   return fn(params, ctx);
 }
 
+// ---------- chat do painel lateral (LLM + ferramentas do navegador) ----------
+
+const chatSessions = new Map(); // port -> { history: [], abort: AbortController | null }
+
+async function chatExec(tool, args) {
+  switch (tool) {
+    case 'pagina_atual': return handlers.snapshot({}, {});
+    case 'ler_pagina': return handlers.read({ format: 'text', limit: Math.min(Number(args.limite) || 8000, 20000) }, {});
+    case 'navegar': return handlers.navigate({ url: String(args.url || ''), newTab: !!args.nova_aba }, {});
+    case 'tarefa': {
+      const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+      return startTask({ goal: String(args.objetivo || ''), details: args.detalhes, tabId: tab?.id }, { source: 'panel' });
+    }
+    case 'verificar': return handlers['jev.check']({ statement: String(args.afirmacao || '') }, {});
+    default: return { erro: `ferramenta desconhecida: ${tool}` };
+  }
+}
+
+async function onChat(port, msg) {
+  const sess = chatSessions.get(port) || { history: [], abort: null };
+  chatSessions.set(port, sess);
+  const settings = await loadSettings();
+  if (!endpoints(settings).chatKey) {
+    port.postMessage({ type: 'chat-error', message: 'Sem chave configurada. Abra Settings e cole a chave do OpenRouter.' });
+    return;
+  }
+  if (msg.mode === 'computador') {
+    port.postMessage({
+      type: 'chat-done',
+      fala: 'O modo Computador controla o PC inteiro (mouse, teclado, outros apps) e exige um aplicativo nativo companheiro, que ainda não faz parte do projeto. No modo Navegador eu já controlo as abas do seu Chrome com seus logins — troque o seletor pra Navegador e mande o comando.',
+    });
+    return;
+  }
+  sess.abort = new AbortController();
+  port.postMessage({ type: 'chat-typing' });
+  sess.history.push({ role: 'user', content: String(msg.text || '') });
+  try {
+    const { fala, cost } = await runChat({
+      settings,
+      history: sess.history.slice(-20),
+      signal: sess.abort.signal,
+      exec: chatExec,
+      onEvent: (event) => { try { port.postMessage({ type: 'chat-event', event }); } catch {} },
+    });
+    sess.history.push({ role: 'assistant', content: fala });
+    if (sess.history.length > 24) sess.history = sess.history.slice(-24);
+    port.postMessage({ type: 'chat-done', fala, cost });
+  } catch (err) {
+    port.postMessage({ type: 'chat-error', message: String(err.message || err) });
+  }
+}
+
 // ---------- side panel ----------
 
 chrome.runtime.onConnect.addListener((port) => {
@@ -344,6 +397,11 @@ chrome.runtime.onConnect.addListener((port) => {
         port.postMessage({ type: 'error', message: String(err.message || err) });
       }
     }
+    if (msg.type === 'chat') {
+      try { await onChat(port, msg); } catch (err) { port.postMessage({ type: 'chat-error', message: String(err.message || err) }); }
+      return;
+    }
+    if (msg.type === 'chat-stop') { chatSessions.get(port)?.abort?.abort(); return; }
     if (msg.type === 'reconnect') { bridge?.connect(); relay?.connect(); }
   });
   bridge?.connect();
