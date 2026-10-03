@@ -160,4 +160,6 @@ Feito: eventos ao vivo, fila com cancelamento, histórico persistido, presets co
 
 Próximo degrau do modo híbrido: o app nativo com os botões **Navegador / Computador / Híbrido** — ele controla o PC via `native/` e o navegador via ponte da extensão (10522). A extensão sozinha nunca controla o computador (sandbox do Chrome).
 
+**Subagentes isolados (roadmap):** rodar N agentes em paralelo, cada um com navegador próprio e seus acessos separados em **grupos de guias nomeados por agente** (a extensão já agrupa abas; falta nomear por agente e permitir concorrência por aba-grupo). Junto, um **governador de hardware local** (sem telemetria, sem nuvem): mede RAM/CPU livres na máquina antes de subir cada subagente e recusa/engarafa quando falta recurso — ex.: 200 MB livres não sobrevive a mais um Chromium; o governador admite novos agentes só dentro do orçamento, com limite configurável no painel. Cuidado de design: paralelismo multiplica carga sobre sites de terceiros — manter limites globais de passos/ritmo somando todos os agentes.
+
 Fora do escopo por decisão de design: jitter/"humanização" de ritmo, engajamento automático em redes sociais, unificação dos dois modos.
