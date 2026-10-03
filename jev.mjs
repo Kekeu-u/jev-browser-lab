@@ -195,21 +195,42 @@ async function cmdStatus() {
   say(`  chave: ${s.hasKey ? "configurada" : "FALTANDO no front/.env"} | execucao em andamento: ${s.running ? "sim" : "nao"} | fila: ${s.queued}`);
 }
 
+function chromeRodando() {
+  if (!IS_WIN) return false;
+  try {
+    const q = spawnSync(
+      join(process.env.SystemRoot || "C:\\Windows", "System32", "tasklist.exe"),
+      ["/FI", "IMAGENAME eq chrome.exe", "/NH"],
+      { encoding: "utf8", windowsHide: true },
+    );
+    return /chrome\.exe/i.test(q.stdout || "");
+  } catch { return false; }
+}
+
 async function cmdExtensao() {
   say("Preparando a instalacao da extensao no seu Chrome...");
   if (!existsSync(join(ROOT, "jev-browser-control", "extension", "manifest.json"))) {
     return die("Pasta jev-browser-control/extension nao encontrada.");
   }
   if (IS_WIN) {
-    // Chrome em chrome://extensions (a pagina de instalacao)
+    // Chrome em chrome://extensions — mas Chrome já aberto ignora URL externa
+    // (mostra o seletor de perfis e descarta o endereço): nesse caso o endereço
+    // vai pra área de transferência, é só colar na barra de endereço.
     const cands = [
       join(process.env.ProgramFiles || "C:\\Program Files", "Google", "Chrome", "Application", "chrome.exe"),
       join(process.env["ProgramFiles(x86)"] || "C:\\Program Files (x86)", "Google", "Chrome", "Application", "chrome.exe"),
       join(process.env.LOCALAPPDATA || "", "Google", "Chrome", "Application", "chrome.exe"),
     ].filter(Boolean);
     const chrome = cands.find(existsSync);
-    if (chrome) {
+    if (chrome && !chromeRodando()) {
       spawn(chrome, ["chrome://extensions"], { detached: true, stdio: "ignore" }).unref();
+    } else if (chrome) {
+      try {
+        // clip síncrono: garantido na área de transferência antes do aviso
+        spawnSync("cmd", ["/c", "echo chrome://extensions|clip"], { windowsHide: true, stdio: "ignore" });
+        say("- Seu Chrome ja esta aberto: colei chrome://extensions na area de");
+        say("  transferencia. Na barra de endereco do Chrome: Ctrl+V e Enter.");
+      } catch {}
     } else {
       say("[!] Chrome nao achei nos lugares comuns - abra chrome://extensions na mao.");
     }
