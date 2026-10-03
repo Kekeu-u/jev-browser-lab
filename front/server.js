@@ -46,28 +46,35 @@ function readEnvFile() {
   return env;
 }
 
+// A chave é do "cérebro" (o modelo Jev): OpenRouter (sk-or-…) ou TypeSafe (ts_…).
+// Uma só fica ativa por vez — ao salvar uma, a outra sai do .env.
+function providerAtivo(envFile) {
+  if (envFile.OPENROUTER_API_KEY) return "openrouter";
+  if (envFile.TYPESAFE_API_KEY) return "typesafe";
+  return null;
+}
+
 function childEnv(delayMs) {
-  const env = { ...process.env, ...readEnvFile(), JEV_PROVIDER: "openrouter" };
+  const envFile = readEnvFile();
+  const provider = providerAtivo(envFile) || "openrouter";
+  const env = { ...process.env, ...envFile, JEV_PROVIDER: provider };
   if (delayMs > 0) env.JEV_BROWSER_ACTION_DELAY_MS = String(delayMs);
   else delete env.JEV_BROWSER_ACTION_DELAY_MS;
   return env;
 }
 
-// Grava a chave no .env preservando as outras variáveis (FAST_HOSTS etc.).
-function writeEnvKey(key) {
+// Grava a chave no .env preservando as outras variáveis (FAST_HOSTS etc.)
+// e removendo a chave do outro provedor, pra nunca haver dúvida de qual vale.
+function writeEnvKey(alvo, key) {
   const file = path.join(ROOT, ".env");
   const lines = fs.existsSync(file) ? fs.readFileSync(file, "utf8").split(/\r?\n/) : [];
+  const alvoVar = alvo === "typesafe" ? "TYPESAFE_API_KEY" : "OPENROUTER_API_KEY";
   const out = [];
-  let replaced = false;
   for (const line of lines) {
-    if (/^\s*OPENROUTER_API_KEY\s*=/.test(line)) {
-      out.push(`OPENROUTER_API_KEY=${key}`);
-      replaced = true;
-    } else if (line.trim() !== "") {
-      out.push(line);
-    }
+    if (/^\s*(OPENROUTER_API_KEY|TYPESAFE_API_KEY)\s*=/.test(line)) continue;
+    if (line.trim() !== "") out.push(line);
   }
-  if (!replaced) out.push(`OPENROUTER_API_KEY=${key}`);
+  out.push(`${alvoVar}=${key}`);
   fs.writeFileSync(file, out.join("\n") + "\n");
   try { fs.chmodSync(file, 0o600); } catch {} // POSIX; no Windows é no-op
 }
@@ -79,11 +86,14 @@ function keyPreview(k) {
 
 // Nunca ecoar a chave: erros do provedor podem refletir o header Authorization.
 function redact(s) {
-  const k = readEnvFile().OPENROUTER_API_KEY;
+  const envFile = readEnvFile();
   let out = String(s);
-  if (k) out = out.split(k).join("[redacted]");
+  for (const k of [envFile.OPENROUTER_API_KEY, envFile.TYPESAFE_API_KEY]) {
+    if (k) out = out.split(k).join("[redacted]");
+  }
   return out
     .replace(/sk-or-[A-Za-z0-9_-]{8,}/g, "[redacted]")
+    .replace(/ts_[A-Za-z0-9_-]{8,}/g, "[redacted]")
     .replace(/(Bearer\s+)[A-Za-z0-9._~+/=-]+/gi, "$1[redacted]");
 }
 
@@ -245,6 +255,13 @@ function startRun(run) {
     "--events",
     "--live-shot", liveShot,
   ];
+  // Só a TypeSafe na chave = sem provedor de digitação (a TypeSafe não é um);
+  // a menos que o usuário tenha configurado JEV_BROWSER_TYPE_* no .env.
+  {
+    const envFile = readEnvFile();
+    const typingConfigured = envFile.JEV_BROWSER_TYPE_PROVIDER || envFile.JEV_BROWSER_TYPE_API_KEY || envFile.JEV_BROWSER_TYPE_BASE_URL;
+    if (!envFile.OPENROUTER_API_KEY && envFile.TYPESAFE_API_KEY && !typingConfigured) args.push("--no-typing");
+  }
   const child = spawn(process.execPath, args, { env: childEnv(run.delayMs) });
   activeChild = child;
   run.child = child;
@@ -353,8 +370,8 @@ function enqueueRun(body, cb) {
   if (queue.length >= MAX_QUEUE) return cb({ status: 429, error: "Fila cheia; espere terminar uma execução." });
 
   const envFile = readEnvFile();
-  if (!envFile.OPENROUTER_API_KEY) {
-    return cb({ status: 400, error: "Sem OPENROUTER_API_KEY no front/.env — crie o arquivo a partir do .env.example." });
+  if (!envFile.OPENROUTER_API_KEY && !envFile.TYPESAFE_API_KEY) {
+    return fail(400, "Sem chave do cérebro (OpenRouter ou TypeSafe) — defina pelo painel ou no front/.env.");
   }
 
   const floor = isOwnHost(url) ? 0 : 750;
@@ -453,11 +470,12 @@ const server = http.createServer((req, res) => {
 
   if (req.method === "GET" && u.pathname === "/api/status") {
     const envFile = readEnvFile();
-    const hasKey = Boolean(envFile.OPENROUTER_API_KEY);
+    const key = envFile.OPENROUTER_API_KEY || envFile.TYPESAFE_API_KEY || null;
+    const hasKey = Boolean(key);
     res.writeHead(200, { "Content-Type": "application/json" });
     return res.end(JSON.stringify({
       hasKey,
-      keyPreview: hasKey ? keyPreview(envFile.OPENROUTER_API_KEY) : null,
+      keyPreview: hasKey ? keyPreview(key) : null,
       running: Boolean(activeRun),
       queued: queue.length,
       pid: process.pid,
@@ -486,28 +504,35 @@ const server = http.createServer((req, res) => {
       let body = {};
       try { body = JSON.parse(raw || "{}"); } catch {}
       const chave = typeof body.chave === "string" ? body.chave.trim() : "";
-      if (!/^sk-or-[A-Za-z0-9_-]{10,}$/.test(chave)) {
+      let alvo = null;
+      if (/^sk-or-[A-Za-z0-9_-]{10,}$/.test(chave)) alvo = "openrouter";
+      else if (/^ts_[A-Za-z0-9_-]{10,}$/.test(chave)) alvo = "typesafe";
+      if (!alvo) {
         res.writeHead(400, { "Content-Type": "application/json" });
-        return res.end(JSON.stringify({ error: "Formato inválido — a chave do OpenRouter começa com sk-or- ." }));
+        return res.end(JSON.stringify({ error: "Formato não reconhecido — chave do OpenRouter (sk-or-…) ou da TypeSafe (ts_…)." }));
       }
-      const checkUrl = readEnvFile().OPENROUTER_KEY_CHECK_URL || process.env.OPENROUTER_KEY_CHECK_URL || "https://openrouter.ai/api/v1/auth/key";
-      let validada = null; // null = sem rede, true = ok, false = rejeitada
+      // Só o OpenRouter tem endpoint de validação que conhecemos; TypeSafe
+      // salva direto (o primeiro run confirma se funciona).
+      let validada = null; // null = sem validação, true = ok, false = rejeitada
+      if (alvo === "openrouter") {
+        const checkUrl = readEnvFile().OPENROUTER_KEY_CHECK_URL || process.env.OPENROUTER_KEY_CHECK_URL || "https://openrouter.ai/api/v1/auth/key";
+        try {
+          const r = await fetch(checkUrl, {
+            headers: { Authorization: `Bearer ${chave}` },
+            signal: AbortSignal.timeout(6000),
+          });
+          if (r.status === 401 || r.status === 403) validada = false;
+          else validada = true;
+        } catch {
+          validada = null;
+        }
+        if (validada === false) {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          return res.end(JSON.stringify({ error: "O OpenRouter rejeitou essa chave (401/403). Confira em openrouter.ai/settings/keys." }));
+        }
+      }
       try {
-        const r = await fetch(checkUrl, {
-          headers: { Authorization: `Bearer ${chave}` },
-          signal: AbortSignal.timeout(6000),
-        });
-        if (r.status === 401 || r.status === 403) validada = false;
-        else validada = true;
-      } catch {
-        validada = null;
-      }
-      if (validada === false) {
-        res.writeHead(400, { "Content-Type": "application/json" });
-        return res.end(JSON.stringify({ error: "O OpenRouter rejeitou essa chave (401/403). Confira em openrouter.ai/settings/keys." }));
-      }
-      try {
-        writeEnvKey(chave);
+        writeEnvKey(alvo, chave);
       } catch (e) {
         res.writeHead(500, { "Content-Type": "application/json" });
         return res.end(JSON.stringify({ error: "Falha ao gravar o front/.env: " + (e && e.message) }));
@@ -515,9 +540,14 @@ const server = http.createServer((req, res) => {
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({
         ok: true,
+        provedor: alvo,
         keyPreview: keyPreview(chave),
         validada,
-        aviso: validada === null ? "Sem rede para validar agora; chave salva mesmo assim." : null,
+        aviso: validada === null
+          ? (alvo === "openrouter"
+            ? "Sem rede para validar agora; chave salva mesmo assim."
+            : "Chave TypeSafe salva sem validação automática — o primeiro run confirma.")
+          : null,
       }));
     });
     return;

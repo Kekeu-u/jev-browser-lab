@@ -231,11 +231,14 @@
 
   <div class="backdrop" id="keyModal" hidden>
     <div class="modal">
-      <span class="label">Chave do OpenRouter</span>
-      <input type="password" id="keyInput" placeholder="sk-or-v1-…" autocomplete="off" spellcheck="false" maxlength="120">
+      <span class="label">Chave do cérebro (Jev)</span>
+      <input type="password" id="keyInput" placeholder="sk-or-… ou ts_…" autocomplete="off" spellcheck="false" maxlength="120">
       <p class="hint" style="margin-top:10px">
-        Gravada só no arquivo local <code>front/.env</code> (com permissão restrita) e validada com o OpenRouter antes de salvar.
-        Ela nunca aparece na página nem em logs. Crie uma em openrouter.ai/settings/keys.
+        É a chave que alimenta o modelo Jev, do OpenRouter
+        (<code>sk-or-…</code>, openrouter.ai/settings/keys) ou da TypeSafe
+        (<code>ts_…</code>, console.typesafe.ai/settings/keys).
+        Gravada só no arquivo local <code>front/.env</code> (com permissão restrita);
+        a do OpenRouter é validada antes de salvar. Ela nunca volta pra página — só a prévia.
       </p>
       <p class="err" id="keyErr" hidden></p>
       <p class="hint" id="keyOk" hidden style="color:var(--green);margin-top:10px"></p>

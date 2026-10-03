@@ -94,7 +94,7 @@ O que o supervisor garante:
 - **Serviço desacoplado** — feche o terminal, o serviço continua; log da sessão em `front/runs/server.log`.
 - **Desligamento completo** — `stop` derruba a cadeia inteira (Windows: `taskkill /T`; POSIX: kill do grupo de processo) e remove o pidfile. Órfãos de crash são colhidos no próximo boot via pidfile.
 
-Depois do `setup`, falta só o passo manual: cole sua chave do [OpenRouter](https://openrouter.ai/settings/keys) em `front/.env` (copiado do `.env.example`). A chave nunca vai para a página — só no env do processo filho, e qualquer eco é redigido.
+Depois do `setup`, falta só o passo manual: a **chave do cérebro** (o modelo Jev) — do [OpenRouter](https://openrouter.ai/settings/keys) (`sk-or-…`) ou da [TypeSafe](https://console.typesafe.ai/settings/keys) (`ts_…`), colada pelo próprio painel (botão "chave" no topo) ou em `front/.env`. Só a do OpenRouter tem validação automática ao salvar; com só a TypeSafe, o painel desliga a digitação de textos automaticamente (a TypeSafe decide, não digita). A chave nunca vai para a página — só no env do processo filho, e qualquer eco é redigido.
 
 **Extensão (opcional, Chrome real):** `chrome://extensions` → modo desenvolvedor → carregar sem compactação → pasta `jev-browser-control/extension` → nas opções, cole a mesma chave. Para comandar por agente (MCP), registre `node jev-browser-control/mcp/server.mjs` com `JBC_MODE=extension`.
 
