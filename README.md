@@ -97,7 +97,7 @@ O que o supervisor garante:
 
 Depois do `setup`, falta só o passo manual: a **chave do cérebro** (o modelo Jev) — do [OpenRouter](https://openrouter.ai/settings/keys) (`sk-or-…`) ou da [TypeSafe](https://console.typesafe.ai/settings/keys) (`ts_…`), colada pelo próprio painel (botão "chave" no topo) ou em `front/.env`. Só a do OpenRouter tem validação automática ao salvar; com só a TypeSafe, o painel desliga a digitação de textos automaticamente (a TypeSafe decide, não digita). A chave nunca vai para a página — só no env do processo filho, e qualquer eco é redigido.
 
-**Extensão (opcional, Chrome real):** `chrome://extensions` → modo desenvolvedor → carregar sem compactação → pasta `jev-browser-control/extension` → nas opções, cole a mesma chave. Para comandar por agente (MCP), registre `node jev-browser-control/mcp/server.mjs` com `JBC_MODE=extension`.
+**Extensão (seu Chrome do dia a dia, com seus logins):** rode `node jev.mjs extensao` — abre o Chrome em `chrome://extensions`, a pasta certa no Explorer e a chave no Bloco de Notas; restam só os cliques: modo desenvolvedor → carregar sem compactação (pasta `jev-browser-control/extension`) → Opções → colar a chave → Test connection. Para comandar por agente (MCP), registre `node jev-browser-control/mcp/server.mjs` com `JBC_MODE=extension`.
 
 ## Uso
 

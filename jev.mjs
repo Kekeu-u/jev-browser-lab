@@ -195,7 +195,47 @@ async function cmdStatus() {
   say(`  chave: ${s.hasKey ? "configurada" : "FALTANDO no front/.env"} | execucao em andamento: ${s.running ? "sim" : "nao"} | fila: ${s.queued}`);
 }
 
+async function cmdExtensao() {
+  say("Preparando a instalacao da extensao no seu Chrome...");
+  if (!existsSync(join(ROOT, "jev-browser-control", "extension", "manifest.json"))) {
+    return die("Pasta jev-browser-control/extension nao encontrada.");
+  }
+  if (IS_WIN) {
+    // Chrome em chrome://extensions (a pagina de instalacao)
+    const cands = [
+      join(process.env.ProgramFiles || "C:\\Program Files", "Google", "Chrome", "Application", "chrome.exe"),
+      join(process.env["ProgramFiles(x86)"] || "C:\\Program Files (x86)", "Google", "Chrome", "Application", "chrome.exe"),
+      join(process.env.LOCALAPPDATA || "", "Google", "Chrome", "Application", "chrome.exe"),
+    ].filter(Boolean);
+    const chrome = cands.find(existsSync);
+    if (chrome) {
+      spawn(chrome, ["chrome://extensions"], { detached: true, stdio: "ignore" }).unref();
+    } else {
+      say("[!] Chrome nao achei nos lugares comuns - abra chrome://extensions na mao.");
+    }
+    // Pasta pronta pro "Carregar sem compactacao"
+    spawn("explorer.exe", [join(ROOT, "jev-browser-control", "extension")], { detached: true, stdio: "ignore" }).unref();
+    // A chave aberta pra copiar (se ja configurada no painel)
+    if (existsSync(join(FRONT, ".env"))) {
+      spawn("notepad.exe", [join(FRONT, ".env")], { detached: true, stdio: "ignore", windowsHide: true }).unref();
+      say("- Abri o Bloco de Notas com a chave (a linha OPENROUTER_API_KEY): copie ela.");
+    } else {
+      say("[!] Sem front/.env ainda - configure a chave no painel antes (ou copie de onde voce tem).");
+    }
+  } else {
+    say(`Abra chrome://extensions e carregue sem compactacao a pasta:
+  ${join(ROOT, "jev-browser-control", "extension")}`);
+  }
+  say("");
+  say("Passos no Chrome (o resto e so clicar):");
+  say("  1. Em chrome://extensions, ligue o Modo do desenvolvedor (cima a direita)");
+  say("  2. Carregar sem compactacao -> selecione a pasta que abri no Explorer (extension)");
+  say("  3. Pino do Jev na barra; clique nele -> Opcoes");
+  say("  4. Escolha 'Your own OpenRouter key', cole a chave, Test connection");
+  say("Pronto: painel lateral do Jev no SEU Chrome, com seus logins.");
+}
+
 const cmd = (process.argv[2] || "start").toLowerCase();
-const cmds = { setup: cmdSetup, start: cmdStart, stop: cmdStop, status: cmdStatus };
-if (!cmds[cmd]) die(`Uso: node jev.mjs [start|stop|status|setup]  (default: start)`);
+const cmds = { setup: cmdSetup, start: cmdStart, stop: cmdStop, status: cmdStatus, extensao: cmdExtensao };
+if (!cmds[cmd]) die(`Uso: node jev.mjs [start|stop|status|setup|extensao]  (default: start)`);
 cmds[cmd]();
